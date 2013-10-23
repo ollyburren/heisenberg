@@ -5,7 +5,7 @@ use Data::Dumper;
 
 open(GENES,">genes.txt") || die "Cannot open genes.txt\n";
 
-my $XSLT<<EOXSLT;
+my $XSLT=<<EOXSLT;
 <xsl:stylesheet 
 xmlns:xsl="http://www.w3.org/1999/XSL/Transform" 
 version="1.0" 
