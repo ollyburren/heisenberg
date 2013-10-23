@@ -129,13 +129,13 @@ my %CADAPT_PARAM=(
 		a=>$cfg->val('CUTADAPT ilmn_left','a'),
 		#q=> $cfg->val('CUTADAPT ilmn_left','q'),
 		O=>$cfg->val('CUTADAPT ilmn_left','O'),
-		m=>$cfg->val('CUTADAPT ilmn_left','m')
+		#m=>$cfg->val('CUTADAPT ilmn_left','m')
 	},
 	right=>{
 		a=>$cfg->val('CUTADAPT ilmn_right','a'),
 		#q=> $cfg->val('CUTADAPT ilmn_right','q'),
 		O=>$cfg->val('CUTADAPT ilmn_right','O'),
-		m=>$cfg->val('CUTADAPT ilmn_right','m')
+		#m=>$cfg->val('CUTADAPT ilmn_right','m')
 	},
 	foxp3_left=>{
 		g=>$cfg->val("CUTADAPT ${gene}_left",'g'),
