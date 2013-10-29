@@ -3,7 +3,12 @@ use XML::LibXSLT;
 use strict;
 use Data::Dumper;
 
+my $DELIM = ","; ## CHANGE THIS IF YOU WANT COMMA's
+
+
 open(GENES,">genes.txt") || die "Cannot open genes.txt\n";
+
+##NOTE THIS XSLT ONLY WORKS WITH LibreOffice Word docs atm
 
 my $XSLT=<<EOXSLT;
 <xsl:stylesheet 
@@ -119,7 +124,7 @@ my $xslt = XML::LibXSLT->new();
 my $dom = XML::LibXML->load_xml(string=>$string);
 my $style_doc = XML::LibXML->load_xml(string=>$XSLT, no_cdata=>1);
 my $stylesheet = $xslt->parse_stylesheet($style_doc);
-my $results = $stylesheet->transform($dom);
+my $results = $stylesheet->transform($dom);;
 my $txt = $stylesheet->output_as_bytes($results);
 $txt=~s/(<header>)/<fasta>$1/g;
 $txt=~s/(<\/sequence>)/$1<\/fasta>/g;
@@ -160,7 +165,7 @@ foreach my $fasta ($dom->findnodes('/run/fasta')) {
 	 }
 	 
 }
-
+ 
 ##next we parse the sample file to work out which genes are assayed in which well
 
 open(IN,$sample_file);
@@ -178,16 +183,24 @@ my @gcols;
 while(<IN>){
 	chomp;
 	unless(@header){
-		@header=map{uc $_}split("\t",$_);
+		@header=map{uc $_}split($DELIM,$_);
 		@gcols=grep{$header[$_]=~/^GENE\s+[0-9]$/i}0..$#header;
 	}else{
-		my @val = split("\t",$_);
+		my @val = split($DELIM,$_);
 		foreach my $i(@gcols){
 			next unless $val[$i];
-			push @{$CONF{$lu{uc $val[$i]}}{wells}},"$val[0]_$val[1]";
+			## if values are different use lookup defined in __DATA__
+      if(my $nval=$lu{uc $val[$i]}){
+      	push @{$CONF{$nval}{wells}},"$val[0]_$val[1]";
+      }else{
+      	## otherwise just use raw values and assume that they
+      	## are the same between design files and sample file
+      	push @{$CONF{uc $val[$i]}{wells}},"$val[0]_$val[1]";
+      }
 		}
 	}
 }
+
 
 print $HEADER;
 
@@ -232,4 +245,3 @@ sub roundoff{
 close(GENES);
 
 __DATA__
-
