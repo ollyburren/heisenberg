@@ -134,6 +134,10 @@ while(<GENES>){
 		my $rname = basename($f1,$SUFFIX);
 		(my $f2=$f1) =~ s/$SUFFIX$/$alt_suffix/;
 		my $cmd = "env perl $cm_path -b $out_dir -ini $ini -gene $GENE_NAME -f1 $f1 -f2 $f2";
+		print "$cmd > $log_dir$rname.log 2>&1";
+		## uncomment below to run w/o q
+		#`$cmd > $log_dir$rname.log 2>&1`;
+		#next;
 		my ($fh,$fname) = &get_tmp_file();
 		print($fh $cmd);
 		close($fh);

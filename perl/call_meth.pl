@@ -9,7 +9,9 @@ use Data::Dumper;
 my $TEST_MET_CALL_ONLY=0;
 ## USED IN CALL METH WHEN POLY T's are PRESENT TO STOP INFINITE RECURSION
 ## IN PRACTICE SHOULDN'T EVER BE REACHED.
-my $MAX_RECURSION_LEVEL=10; 
+my $MAX_RECURSION_LEVEL=10;
+## set to one to stop using cutadapt to trim ilumina_adaptors
+my $DISABLE_ADAPTOR_TRIM=1;
 
 my $USAGE=<<EOL;
 $0: Count methylation sites in a set of paired end reads.
@@ -218,14 +220,18 @@ if($trim_flag=~/[0-9]+/){
 ##TRIM ILLUMINA ADAPTOR SEQUENCE##
 ##################################
 
+print "#########ILM_ADAPTOR_TRIMMING DISABLED\n" if $DISABLE_ADAPTOR_TRIM;
+
 ##trim LH side ill
 my $lhfile="$base_dir/remove_il_adaptor/".basename($fq1,'.fq.gz');
-$cmd =  $CADAPT_PARAM{left}{cmd}." $fq1 2> $lhfile.cut.stats.out | gzip - > $lhfile.trimmed.fq.gz"; 
+$cmd =  $CADAPT_PARAM{left}{cmd}." $fq1 2> $lhfile.cut.stats.out | gzip - > $lhfile.trimmed.fq.gz";
+$cmd = "cp  $fq1  $lhfile.trimmed.fq.gz" if $DISABLE_ADAPTOR_TRIM;
 print $cmd."\n";
 `$cmd` unless $TEST_MET_CALL_ONLY;
 ##trim RH side ill
 my $rhfile="$base_dir/remove_il_adaptor/".basename($fq2,'.fq.gz');
-$cmd =  $CADAPT_PARAM{right}{cmd}." $fq2 2> $rhfile.cut.stats.out | gzip - > $rhfile.trimmed.fq.gz"; 
+#$cmd =  $CADAPT_PARAM{right}{cmd}." $fq2 2> $rhfile.cut.stats.out | gzip - > $rhfile.trimmed.fq.gz";
+$cmd = "cp  $fq2  $rhfile.trimmed.fq.gz" if $DISABLE_ADAPTOR_TRIM;
 print $cmd."\n";
 `$cmd` unless $TEST_MET_CALL_ONLY;
 
@@ -272,7 +278,7 @@ if($trim_flag eq 'sickle'){
 
 my $sfile = basename($lhfile,'.1');
 #$cmd="$BIN{flash} $lhfile.trimmed.fq.gz $rhfile.trimmed.fq.gz -z -o $sfile -d $base_dir/stitch/ >$base_dir/stitch/$sfile.stats.txt";
-$cmd="$BIN{flash} $lsfile $rsfile -z -o $sfile -d $base_dir/stitch/ >$base_dir/stitch/$sfile.stats.txt";
+$cmd="$BIN{flash} -M 222  -z -o $sfile -d $base_dir/stitch/  $lsfile $rsfile > $base_dir/stitch/$sfile.stats.txt";
 print "$cmd\n";
 `$cmd` unless $TEST_MET_CALL_ONLY;
 push @{$RC{STITCH}},count_fastqreads("$base_dir/stitch/$sfile.extendedFrags.fastq.gz");
