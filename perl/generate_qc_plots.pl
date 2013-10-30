@@ -105,6 +105,7 @@ print $fh $R_INSERT_SIZE;
 close($fh);
 my $cmd = "$RSCRIPT --vanilla $fname > $out_dir/generate_qc_plot_error.txt 2>&1";
 `$cmd`;
+unlink($fname);
 
 sub get_tmp_file{
 	my $dir = shift;
