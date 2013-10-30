@@ -8,18 +8,24 @@ use POSIX;
 use Config::IniFiles;
 use Data::Dumper;
 use Getopt::Long;
+use Cwd 'abs_path';
+
+my $CM_SCRIPT=dirname(abs_path($0))."/call_meth.pl";
+
+if(! -e $CM_SCRIPT){
+	die "Cannot find $CM_SCRIPT at $CM_SCRIPT, please check\n";
+}
 
 my $USAGE=<<EOL;
 $0: Process demultiplexed data and call methylation sites.
 
-$0 -out_dir output_dir --ini inifile.ini --gene_file gene.txt --log_dir log_dir --call_meth path to call_meth
+$0 -out_dir output_dir --ini inifile.ini --gene_file gene.txt --log_dir log_dir 
 
 	MANDATORY PARAMETERS
 		out_dir|o:	path to a location to store intermediate and final analysis files
 		ini|i: path to ini file containing configuration options.
 		gene_file|g: file containing list of genes to process.
 		log_dir|l path to location to store logging information
-		call_meth|cm absolute path to location of call_meth.pl script
 		data_dir|d absolute path to location of gzipped fastq files
 		
 	OPTIONAL
@@ -36,7 +42,7 @@ EOL
 #OPTIONS PROCESSING#
 ####################
 
-my ($out_dir,$ini,$genes,$log_dir,$cm_path,$test,$prefix,$data_dir,$help);
+my ($out_dir,$ini,$genes,$log_dir,$test,$prefix,$data_dir,$help);
 
 GetOptions(	
 	"data_dir|d=s" => \$data_dir,
@@ -45,7 +51,6 @@ GetOptions(
 	"ini|i=s" => \$ini,
 	"genes_file|g=s" => \$genes,
 	"log_dir|l=s"=>\$log_dir,
-	"call_meth|cm=s"=>\$cm_path,
 	"test|t"=>\$test,
 	"help|h"=>\$help);
 
@@ -64,9 +69,6 @@ unless($ABORT_FLAG){
 	}elsif(!$ini){
 		print "[ERROR] Require --ini option: Path to ini\n";
 		$ABORT_FLAG++;
-	}elsif(!$cm_path){
-		print "[ERROR] Require --call_meth/-cm option: Path to call_meth.pl script\n";
-		$ABORT_FLAG++;
 	}elsif(!$data_dir){
 		print "[ERROR] Require --data_dir/-d option: Path to data dir containing fq.gz files\n";
 		$ABORT_FLAG++;
@@ -83,9 +85,6 @@ unless($ABORT_FLAG){
 		$ABORT_FLAG++;
 	}elsif(! -e $genes){
 		print "[ERROR] Cannot find list of genes file $genes \n";
-		$ABORT_FLAG++;
-	}elsif(! -e $cm_path){
-		print "[ERROR] Cannot find call_meth script at $cm_path\n";
 		$ABORT_FLAG++;
 	}elsif(! -d $data_dir){
 		print "[ERROR] Cannot find data_dir $data_dir \n";
@@ -116,7 +115,6 @@ while(<GENES>){
 	if(! -e $log_dir){
 		mkdir($log_dir);
 	}else{
-		print $log_dir."\n";
 		opendir(DH,$log_dir);
 		my @delfiles = map{"$log_dir/$_"}grep{/\.log$/}readdir(DH);
 		unlink(@delfiles);
@@ -129,13 +127,12 @@ while(<GENES>){
 	}
 
 	foreach my $f1(@files){
-		print debug($f1);
 		(my $alt_suffix=$SUFFIX)=~s/1/2/;
 		my $rname = basename($f1,$SUFFIX);
 		(my $f2=$f1) =~ s/$SUFFIX$/$alt_suffix/;
-		my $cmd = "env perl $cm_path -b $out_dir -ini $ini -gene $GENE_NAME -f1 $f1 -f2 $f2";
-		print "$cmd > $log_dir$rname.log 2>&1";
-		## uncomment below to run w/o q
+		my $cmd = "env perl $CM_SCRIPT -b $out_dir -ini $ini -gene $GENE_NAME -f1 $f1 -f2 $f2";
+		## uncomment below to run locally rather than on q
+		#print "$cmd > $log_dir$rname.log 2>&1";
 		#`$cmd > $log_dir$rname.log 2>&1`;
 		#next;
 		my ($fh,$fname) = &get_tmp_file();

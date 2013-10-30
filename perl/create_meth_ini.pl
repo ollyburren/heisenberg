@@ -3,7 +3,7 @@ use XML::LibXSLT;
 use strict;
 use Data::Dumper;
 
-my $DELIM = ","; ## CHANGE THIS IF YOU WANT COMMA's
+my $DELIM = "\t"; ## CHANGE THIS IF YOU WANT COMMA's
 
 
 open(GENES,">genes.txt") || die "Cannot open genes.txt\n";
@@ -103,17 +103,6 @@ my $HEADER=<<EOL;
 qscore_cutoff=20
 cutadapt_bin=<FILL ME IN>
 flash_bin=<FILL ME IN>
-sickle_bin=<FILL ME IN>
-
-
-[CUTADAPT ilmn_left]
-a=GATCGGAAGAGCGGTTCAGCAGGAATGCCGAG
-q=20
-O=6
-[CUTADAPT ilmn_right]
-a=AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
-q=20
-O=6
 
 EOL
 
@@ -159,7 +148,10 @@ foreach my $fasta ($dom->findnodes('/run/fasta')) {
 	 	 $CONF{uc $header}{left}=substr($sequence,$met_first_pos-20,20);
 	 	 $CONF{uc $header}{right}=substr($sequence,$met_pos[-1]+$met_first_pos+3,20);
 	 	 $CONF{uc $header}{adaptor}=$adaptor;
-	 	 $CONF{uc $header}{m}=roundoff($adaptor-$met_first_pos-1,10); ## this reproduces what Chris P has used.
+	 	 ## by this stage though we have removed linker (18) and barcode (9) so our effective
+	 	 ## insert size must reflect this i.e -28
+	 	 #$CONF{uc $header}{m}=roundoff($adaptor-$met_first_pos-1,10); ## this reproduces what Chris P has used.
+	 	 $CONF{uc $header}{m}=roundoff($adaptor-$met_first_pos-28,10);
 	 	 $CONF{uc $header}{insert_size}=$met_pos[-1]+3;
 	 	 $CONF{uc $header}{snp}=\@snp_pos;
 	 }
@@ -168,13 +160,13 @@ foreach my $fasta ($dom->findnodes('/run/fasta')) {
  
 ##next we parse the sample file to work out which genes are assayed in which well
 
-open(IN,$sample_file);
+open(IN,$sample_file) || die "Cannot open sample file $sample_file\n";
 
 my %lu;
 while(<DATA>){
 	chomp;
 	my ($k,$v)=split("\t",$_);
-	$lu{$k}=$v;
+	$lu{uc $k}=uc $v;
 }
 
 my %RESULTS;
@@ -201,12 +193,15 @@ while(<IN>){
 	}
 }
 
-
 print $HEADER;
 
 
 
 foreach my $g(keys %CONF){
+	if(ref($CONF{$g}{wells}) ne 'ARRAY' || ref($CONF{$g}{met_pos}) ne 'ARRAY'){
+		print STDERR "## ERROR PROCESSING $g have you mapped gene names between sample and design file correctly\n";
+		next;
+	}
 	print GENES $g."\n";
 	my $MP = join(",",@{$CONF{$g}{met_pos}});
 	my $WELLS = join("\n",@{$CONF{$g}{wells}});
@@ -219,7 +214,7 @@ insert_size=$CONF{$g}{insert_size}
 wells=<<EOL
 $WELLS
 EOL
-trim=sickle
+trim=none
 
 [CUTADAPT ${g}_left]
 g=$CONF{$g}{left}
@@ -245,3 +240,22 @@ sub roundoff{
 close(GENES);
 
 __DATA__
+Cy-FOXP3	Cy-FOXP3
+FOXP3	FOXP3
+HM_EOS_BIS_3F	EOS-3
+HM_MIR21_NGS-3_F	MIR21-3
+IL2RA-660	IL2RA-660
+Insulin	Insulin
+CD4-1	CD4-1
+Cy-CTLA4	Cy-CTLA4
+HM_CD8A_NGS-1_F	CD8-1
+HM_FOXP3_NGS_3F	FOXP3-3
+HM_FOXP3_NGS_4F	FOXP3-4
+HM_TIGIT_NGS-1_F	TIGIT-1
+HM_MPO_NGS_F	MPO
+HM_PYHIN1_NGS-1_F	PYHIN1-1
+HM_MIR21_NGS-1_F	MIR21-1
+HM_PYHIN1_NGS-2_F	PYHIN1-2
+HM_CD8A_NGS-2_F	CD8-2
+HM_MIR21_NGS-2_F	MIR21-2
+HM_TIGIT_NGS-2_F	TIGIT-2

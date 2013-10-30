@@ -3,43 +3,109 @@ use File::Basename;
 use File::Find;
 use File::Temp qw/tempfile/;
 use POSIX;
+use Getopt::Long;
+use Cwd 'abs_path';
 
-
-my $TEST=0;
-my $PRE_PROC_BIN = '<LOC OF REPO>/perlpre_process_meth_run.pl';
-my $ROOT_DIR = "FILL_ME_IN";
-my $DATA_DIR = "$ROOT_DIR/DATA/NGS6/";
-my $OUT_DIR = "$ROOT_DIR/DATA/NGS6/";
-my $LOG_DIR = "$ROOT_DIR/log/NGS6/PRE_PROCESS/";
-my $QSUB_CMD="qsub -q all.q -v PERL5LIB=$ENV{PERL5LIB}";
+my $EXTENSION = '.1.fq.gz';
 my $TMP_DIR='/tmp';
+my $QSUB_CMD="qsub -q all.q -v PERL5LIB=$ENV{PERL5LIB}";
+my $TRIMMO_URL="http://www.usadellab.org/cms/?page=trimmomatic";
 
-my $odir = "${OUT_DIR}PRE_PROCESS/";
-my $tdir = "${OUT_DIR}INDEX_TRIM/";
-my $unpdir = "${OUT_DIR}UNPAIRED/";
+my $PSCRIPT = dirname(abs_path($0))."/pre_process_meth_run.pl";
 
-for my $d(($LOG_DIR,$OUT_DIR,$odir,$tdir,$unpdir)){
+my $USAGE=<<EOL;
+$0: Pre-process demultiplexed reads and trim to gene-spec adaptor and insert
+
+$0 --data_dir data_dir --log_dir log_dir
+
+	MANDATORY PARAMETERS
+		data_dir|d: path to location of demultiplexed data
+		log_dir|l: path to location to store loging information
+		trimmomatic|tj: path to trimmoatic jar file
+
+	OPTIONAL
+		help|h: print this message
+		test|t: run one example to check configuration
+		
+	NOTE:
+		Only works on files with a $EXTENSION extension - this can be changed within the script
+		Output is written to data_dir/PRE_PROCESS
+		Unpaired outut is written to data_dir/UNPAIRED
+		
+		Requires trimmomatic (tested version 0.30), this can be downloaded from $TRIMMO_URL
+		
+	Author: Olly Burren
+	
+Last updated 30/10/2013
+EOL
+
+my ($data_dir,$trimmo,$log_dir,$test,$help);
+
+GetOptions(
+	"data_dir|d=s" => \$data_dir,
+	"log_dir|l=s" => \$log_dir,
+	"trimmomatic|tm=s" => \$trimmo,
+	"test|t" => \$test,
+	"help|h" => \$help);
+
+my $ABORT_FLAG= 0 || $help;
+
+unless($ABORT_FLAG){
+	if(!$data_dir){
+		print "[ERROR] Require --data_dir/-d option: location of demultiplexed reads with extension $EXTENSION\n";
+		$ABORT_FLAG++;
+	}elsif(!$log_dir){
+		print "[ERROR] Require --log_dir/-l option: path to dir to store q logging info\n";
+		$ABORT_FLAG++;
+	}elsif(!$trimmo){
+		print "[ERROR] Require --trimmomatic/-tm option: path to trimmomatic jar file not found\n";
+	}
+}
+
+unless($ABORT_FLAG){
+	if(! -d $data_dir){
+		print "[ERROR] Cannot find $data_dir data_dir\n";
+		$ABORT_FLAG++;
+	}elsif(! -e $PSCRIPT){
+		print "[ERROR] Cannot find preprocess_meth_run script expecting to find at $PSCRIPT\n";
+	}elsif(! -e $trimmo){
+		print "[ERROR] Cannot find trimmomatic jar file. Is this installed ?\n";
+	}
+}
+
+if($ABORT_FLAG){
+	print $USAGE;
+	exit(1);
+}
+
+
+my $odir = "${data_dir}PRE_PROCESS/";
+my $unpdir = "${data_dir}UNPAIRED/";
+
+for my $d(($log_dir,$odir,$unpdir)){
 	`mkdir $d` unless -d $d;
 }
 
-opendir(DIR, $DATA_DIR) or die $!;
+opendir(DIR, $data_dir) or die $!;
 
 while (my $file = readdir(DIR)) {
 	# We only want files
-	next unless (-f "$DATA_DIR/$file");
+	next unless (-f "$data_dir/$file");
 	# Use a regular expression to find files ending in .txt
-	next unless ($file =~ m/\.fq\.gz$/);
-	print "###PROCESSING $DATA_DIR/$file\n";
-	my $stub = basename($file,'.1.fq.gz');
-	my $cmd = "env perl $PRE_PROC_BIN $DATA_DIR/$file $tdir $odir $unpdir $LOG_DIR";
+	next unless ($file =~ m/$EXTENSION$/);
+	print "###PROCESSING $data_dir/$file\n";
+	my $stub = basename($file,$EXTENSION);
+	## $trimmo, out_dir, unpaired_dir, log_dir
+	my $cmd = "env perl $PSCRIPT $trimmo $data_dir/$file $odir $unpdir $log_dir";
 	my ($fh,$fname) = &get_tmp_file();
+	debug($cmd);
 	print($fh $cmd);
 	close($fh);
-	my $cmd = "$QSUB_CMD -o ${LOG_DIR}$stub.log -j y $fname";
+	my $cmd = "$QSUB_CMD -o ${log_dir}$stub.log -j y $fname";
 	debug("$cmd");
 	`$cmd`;
 	unlink("$fname");
-	last if $TEST;
+	last if $test;
 }
 closedir(DIR);
 

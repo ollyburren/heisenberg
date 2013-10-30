@@ -10,8 +10,7 @@ my $TEST_MET_CALL_ONLY=0;
 ## USED IN CALL METH WHEN POLY T's are PRESENT TO STOP INFINITE RECURSION
 ## IN PRACTICE SHOULDN'T EVER BE REACHED.
 my $MAX_RECURSION_LEVEL=10;
-## set to one to stop using cutadapt to trim ilumina_adaptors
-my $DISABLE_ADAPTOR_TRIM=1;
+
 
 my $USAGE=<<EOL;
 $0: Count methylation sites in a set of paired end reads.
@@ -108,7 +107,6 @@ exit(1) if $ABORT_FLAG;
 my %BIN=(
 	cutadapt=>$cfg->val('GENERAL','cutadapt_bin'),
 	flash=>$cfg->val('GENERAL','flash_bin'),
-	sickle=>$cfg->val('GENERAL','sickle_bin')
 );
 
 # quality score cutoff
@@ -121,44 +119,20 @@ foreach my $met($cfg->val($gene,'met_pos')){
 }
 
 #die Dumper(@MET_POSITION)."\n";
-my $trim_flag = $cfg->val($gene,'trim') || 'sickle';
+my $trim_flag = $cfg->val($gene,'trim');
 #insert size
 my $ISIZE=$cfg->val($gene,'insert_size');
 
 #cutadapt parameters
 my %CADAPT_PARAM=(
-	left=>{
-		a=>$cfg->val('CUTADAPT ilmn_left','a'),
-		#q=> $cfg->val('CUTADAPT ilmn_left','q'),
-		O=>$cfg->val('CUTADAPT ilmn_left','O'),
-		#m=>$cfg->val('CUTADAPT ilmn_left','m')
-	},
-	right=>{
-		a=>$cfg->val('CUTADAPT ilmn_right','a'),
-		#q=> $cfg->val('CUTADAPT ilmn_right','q'),
-		O=>$cfg->val('CUTADAPT ilmn_right','O'),
-		#m=>$cfg->val('CUTADAPT ilmn_right','m')
-	},
-	foxp3_left=>{
+	gene_left=>{
 		g=>$cfg->val("CUTADAPT ${gene}_left",'g'),
 		m=>$cfg->val("CUTADAPT ${gene}_left",'m')
 	},
-	foxp3_right=>{
+	gene_right=>{
 		a=>$cfg->val("CUTADAPT ${gene}_right",'a'),
 	}
 );
-
-
-## using cut adapt q parameter and sickle can cause
-## problems as sickle does not cope with reads with 0 bases in
-unless($trim_flag eq 'sickle'){
-	$CADAPT_PARAM{left}{q}=$cfg->val('CUTADAPT ilmn_left','q');
-	$CADAPT_PARAM{right}{q}=$cfg->val('CUTADAPT ilmn_right','q');
-}
-
-
-
-
 
 
 ###############################
@@ -172,7 +146,7 @@ if(! -e $base_dir){
 $base_dir.='/'.$gene;
 if(! -e $base_dir){
 	mkdir($base_dir);
-	for my $d(qw/remove_il_adaptor manual_trim stitch final_trim results sickle pre_trim log/){
+	for my $d(qw/stitch final_trim results pre_trim log/){
 		mkdir($base_dir.'/'.$d);
 	}
 }else{
@@ -187,8 +161,6 @@ foreach my $lr(keys %CADAPT_PARAM){
 	}
 	$CADAPT_PARAM{$lr}{cmd}=$cmd;
 }
-
-
 
 my %RC;
 
@@ -211,74 +183,17 @@ if($trim_flag=~/[0-9]+/){
 	print "$cmd\n";
 	`$cmd` unless $TEST_MET_CALL_ONLY;
 	$fq2 = "$base_dir/pre_trim/".basename($fq2);
-	$trim_flag='none'; ## make sure we don't sickle as well
 	push @{$RC{PRE_TRIM}},count_fastqreads($fq1);
 	push @{$RC{PRE_TRIM}},count_fastqreads($fq2);
 }
 
-##################################
-##TRIM ILLUMINA ADAPTOR SEQUENCE##
-##################################
-
-print "#########ILM_ADAPTOR_TRIMMING DISABLED\n" if $DISABLE_ADAPTOR_TRIM;
-
-##trim LH side ill
-my $lhfile="$base_dir/remove_il_adaptor/".basename($fq1,'.fq.gz');
-$cmd =  $CADAPT_PARAM{left}{cmd}." $fq1 2> $lhfile.cut.stats.out | gzip - > $lhfile.trimmed.fq.gz";
-$cmd = "cp  $fq1  $lhfile.trimmed.fq.gz" if $DISABLE_ADAPTOR_TRIM;
-print $cmd."\n";
-`$cmd` unless $TEST_MET_CALL_ONLY;
-##trim RH side ill
-my $rhfile="$base_dir/remove_il_adaptor/".basename($fq2,'.fq.gz');
-#$cmd =  $CADAPT_PARAM{right}{cmd}." $fq2 2> $rhfile.cut.stats.out | gzip - > $rhfile.trimmed.fq.gz";
-$cmd = "cp  $fq2  $rhfile.trimmed.fq.gz" if $DISABLE_ADAPTOR_TRIM;
-print $cmd."\n";
-`$cmd` unless $TEST_MET_CALL_ONLY;
-
-push @{$RC{TRIM_IL}},count_fastqreads("$lhfile.trimmed.fq.gz");
-push @{$RC{TRIM_IL}},count_fastqreads("$rhfile.trimmed.fq.gz");
-
-###################################
-##TRIM OUR ADAPTOR SEQUENCE########
-###################################
-
-##TODO
-
-##############################################
-##TRIM POOR QUALITY SEQUENCE AT END OF READS##
-##############################################
-
-my $lsfile = "$base_dir/sickle/".basename($lhfile).".trimmed.fq";
-my $rsfile = "$base_dir/sickle/".basename($rhfile).".trimmed.fq";
-if($trim_flag eq 'sickle'){
-	my $sickle_fail = "$base_dir/sickle/".basename($lhfile,".1");
-	my $sickle_out = "$base_dir/sickle/".basename($lhfile,".1.fq.gz").".sickle.out";
-	$cmd = "$BIN{sickle} pe -f $lhfile.trimmed.fq.gz -r $rhfile.trimmed.fq.gz -t sanger -o $lsfile - -p $rsfile -q $QSCORE_CUTOFF -s $sickle_fail -x > $sickle_out";
-	print "$cmd\n";
-	`$cmd` unless $TEST_MET_CALL_ONLY;
-	`gzip -f $rsfile $lsfile`;
-	$lsfile.='.gz';
-	$rsfile.='.gz';
-	push @{$RC{SICKLE}},count_fastqreads("$lsfile");
-	push @{$RC{SICKLE}},count_fastqreads("$rsfile");
-}elsif($trim_flag eq 'none'){ ## NOOP
-	unlink($lsfile) if -e $lsfile;
-	$cmd = "ln -s $lhfile.trimmed.fq.gz $lsfile";
-	print "$cmd\n";
-	`$cmd` unless $TEST_MET_CALL_ONLY;
-	unlink($rsfile) if -e $rsfile;
-	$cmd = "ln -s $rhfile.trimmed.fq.gz  $rsfile";
-	print "$cmd\n";
-	`$cmd` unless $TEST_MET_CALL_ONLY;
-}
 
 #########################
 ##STITCH READS TOGETHER##
 #########################
 
-my $sfile = basename($lhfile,'.1');
-#$cmd="$BIN{flash} $lhfile.trimmed.fq.gz $rhfile.trimmed.fq.gz -z -o $sfile -d $base_dir/stitch/ >$base_dir/stitch/$sfile.stats.txt";
-$cmd="$BIN{flash} -M 222  -z -o $sfile -d $base_dir/stitch/  $lsfile $rsfile > $base_dir/stitch/$sfile.stats.txt";
+my $sfile = basename($fq1,'.1.fq.gz');
+$cmd="$BIN{flash} -M 222  -z -o $sfile -d $base_dir/stitch/  $fq1 $fq2 > $base_dir/stitch/$sfile.stats.txt";
 print "$cmd\n";
 `$cmd` unless $TEST_MET_CALL_ONLY;
 push @{$RC{STITCH}},count_fastqreads("$base_dir/stitch/$sfile.extendedFrags.fastq.gz");
@@ -288,7 +203,7 @@ push @{$RC{STITCH}},count_fastqreads("$base_dir/stitch/$sfile.extendedFrags.fast
 #############################
 
 my $ltfile = "$base_dir/final_trim/$sfile.LTRIM";
-my $cmd =  $CADAPT_PARAM{foxp3_left}{cmd}." $base_dir/stitch/$sfile.extendedFrags.fastq.gz 2>$ltfile.cut.stats.out | gzip - > $ltfile.fq.gz";
+my $cmd =  $CADAPT_PARAM{gene_left}{cmd}." $base_dir/stitch/$sfile.extendedFrags.fastq.gz 2>$ltfile.cut.stats.out | gzip - > $ltfile.fq.gz";
 print "$cmd\n";
 `$cmd` unless $TEST_MET_CALL_ONLY;
 push @{$RC{LEFT_TRIM}},count_fastqreads("$ltfile.fq.gz");
@@ -298,7 +213,7 @@ push @{$RC{LEFT_TRIM}},count_fastqreads("$ltfile.fq.gz");
 #############################
 
 my $rtfile = "$base_dir/final_trim/$sfile.LRTRIM";
-my $cmd =  $CADAPT_PARAM{foxp3_right}{cmd}." $ltfile.fq.gz 2>$rtfile.cut.stats.out | gzip - > $rtfile.fq.gz";
+my $cmd =  $CADAPT_PARAM{gene_right}{cmd}." $ltfile.fq.gz 2>$rtfile.cut.stats.out | gzip - > $rtfile.fq.gz";
 print "$cmd\n";
 `$cmd` unless $TEST_MET_CALL_ONLY;
 push @{$RC{RIGHT_TRIM}},count_fastqreads("$rtfile.fq.gz");
@@ -370,7 +285,7 @@ close(SUMMARY);
 
 
 my $prev_count = $RC{RAW}->[0];
-foreach my $a(qw/SICKLE STITCH LEFT_TRIM CALLED_READS OTHER_READS/){
+foreach my $a(qw/STITCH LEFT_TRIM CALLED_READS OTHER_READS/){
 	next unless $RC{$a};
 	if($a=~/READS$/){
 		print COUNT join("\t","$sfile",$gene,$a,@{$RC{$a}})."\n";
@@ -380,7 +295,6 @@ foreach my $a(qw/SICKLE STITCH LEFT_TRIM CALLED_READS OTHER_READS/){
 	foreach my $c(@{$RC{$a}}){
 		push @adj,$prev_count-$c;
 	}
-	#print COUNT join("\t","$sfile",$gene,$a,'RAWC',@{$RC{$a}})."\n";
 	print COUNT join("\t","$sfile",$gene,"${a}_REMOVED",@adj)."\n";
 	$prev_count = $RC{$a}->[0];
 }
