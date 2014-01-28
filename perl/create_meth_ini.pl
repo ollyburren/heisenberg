@@ -106,8 +106,20 @@ flash_bin=<FILL ME IN>
 
 EOL
 
+## VERY BASIC PARAM HANDLING - REPLACE WITH GETOPTS !
+my $ERROR=0;
 my $file = shift;
+if(! -e $file){
+	print STDERR "Cannot find template word file $file, please check\n";
+	$ERROR++;
+}
 my $sample_file = shift;
+if(! -e $sample_file){
+	print STDERR "Cannot find sample file $sample_file, please check\n";
+	$ERROR++;
+}
+exit if $ERROR;
+
 my $string = `unzip -p $file word/document.xml`;
 my $xslt = XML::LibXSLT->new();
 my $dom = XML::LibXML->load_xml(string=>$string);
