@@ -109,6 +109,8 @@ open(GENES,$genes) || die "Cannot open gene file $genes\n";
 while(<GENES>){
 	chomp;
 	next if /^#/;
+  ## in case the file is DOS
+  s/\r\n/\n/;
 	my $GENE_NAME=$_;
 	my @REGEXP=$cfg->val("$GENE_NAME",'wells');
 	my $log_dir = $log_dir."/$GENE_NAME/";
